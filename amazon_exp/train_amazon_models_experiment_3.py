@@ -6,7 +6,7 @@ from scipy.special import softmax # For smoothing target
 from scipy.ndimage import gaussian_filter1d # For smoothing target
 from collections import defaultdict
 import random
-from tqdm.notebook import tqdm # Use tqdm.notebook for Jupyter/Colab
+from tqdm import tqdm # Use tqdm.notebook for Jupyter/Colab
 import os
 import joblib # To save the vectorizer
 import warnings
@@ -29,9 +29,9 @@ print("--- Model Training Script ---")
 # --- Configuration ---
 # !!! IMPORTANT: Replace with the path to your FULL Electronics TSV file !!!
 DATA_FILE = 'amazon_reviews_us_Electronics_v1_00.tsv' 
-DATA_PATH = './' + DATA_FILE # Assumes file in current directory
+DATA_PATH = '/home/alessandro/Documents/amazon_review/' + DATA_FILE # Assumes file in current directory
 
-OUTPUT_DIR = './trained_models' # Directory to save models and vectorizer
+OUTPUT_DIR = '/home/alessandro/Documents/amazon_review/' # Directory to save models and vectorizer
 MODEL_A_PATH = os.path.join(OUTPUT_DIR, 'model_A.pth')
 MODEL_B_PATH = os.path.join(OUTPUT_DIR, 'model_B.pth')
 VECTORIZER_PATH = os.path.join(OUTPUT_DIR, 'tfidf_vectorizer.joblib')

@@ -5,8 +5,10 @@ import pandas as pd
 from scipy.stats import wasserstein_distance
 from scipy.special import digamma, loggamma
 import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.use('TkAgg')
 import seaborn as sns
-from tqdm.notebook import tqdm # Use tqdm.notebook for Jupyter/Colab
+import  tqdm # Use tqdm.notebook for Jupyter/Colab
 import warnings
 
 # Suppress minor warnings
@@ -122,7 +124,7 @@ results_list = []
 
 for q_name, q_pred in Q_LIST.items():
     print(f"  Simulating for Prediction: {q_name}")
-    for n in tqdm(N_VALUES, desc=f"   Sample Size (n)"):
+    for n in tqdm.tqdm(N_VALUES, desc=f"   Sample Size (n)"):
         rep_results = []
         for _ in range(N_REPETITIONS):
             # Simulate observation counts
