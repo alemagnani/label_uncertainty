@@ -1,17 +1,18 @@
-# evaluate_amazon_models.py
+# evaluate_amazon_models_with_ci.py
 
 import pandas as pd
 import numpy as np
 from scipy.special import digamma
-from scipy.stats import wasserstein_distance
+from scipy.stats import wasserstein_distance, ttest_rel
 import random
-from tqdm import tqdm  # Use standard tqdm if not in notebook
+from tqdm import tqdm
 import matplotlib.pyplot as plt
 import seaborn as sns
 import os
 import joblib
 import warnings
 import matplotlib as mpl
+from scipy import stats
 
 # ML Imports
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -46,7 +47,7 @@ mpl.rcParams.update({
 warnings.filterwarnings("ignore", category=UserWarning)
 pd.options.mode.chained_assignment = None
 
-print("--- Model Evaluation Script ---")
+print("--- Model Evaluation Script with Confidence Intervals ---")
 
 # --- Configuration ---
 OUTPUT_DIR = '/home/alessandro/Documents/amazon_review/'  # Adjusted path assuming models are saved here
@@ -77,6 +78,10 @@ TRANSFORMER_LAYERS = 2
 N_MONTE_CARLO_EMD = 1000
 EPSILON = 1e-9
 
+# Confidence Interval Parameters
+N_BOOTSTRAP = 1000
+CONFIDENCE_LEVEL = 0.95
+
 # --- Configuration for n-bin analysis ---
 N_BINS_CONFIG = [
     (MIN_REVIEWS, 5),
@@ -94,6 +99,45 @@ print(f"Using device: {DEVICE}")
 STAR_RATINGS = [1, 2, 3, 4, 5]
 K = len(STAR_RATINGS)
 ORDINAL_INDICES = np.arange(K)
+
+
+# --- Bootstrap Confidence Interval function ---
+def bootstrap_confidence_interval(data, n_bootstrap=N_BOOTSTRAP, confidence=CONFIDENCE_LEVEL):
+    """Calculate bootstrap confidence interval for a metric."""
+    if len(data) <= 1:
+        return np.nan, np.nan
+
+    bootstrap_samples = []
+    for _ in range(n_bootstrap):
+        # Sample with replacement
+        idx = np.random.choice(len(data), len(data), replace=True)
+        sample = data[idx]
+        bootstrap_samples.append(np.nanmean(sample))
+
+    # Calculate confidence interval
+    alpha = (1 - confidence) / 2
+    lower = np.percentile(bootstrap_samples, alpha * 100)
+    upper = np.percentile(bootstrap_samples, (1 - alpha) * 100)
+
+    return lower, upper
+
+
+# Function to calculate statistical significance
+def calculate_significance(df, model_a, model_b, metric):
+    """Calculate if the difference between models is statistically significant."""
+    col_a = f"{metric}_{model_a}"
+    col_b = f"{metric}_{model_b}"
+
+    # Remove NaN values (paired samples)
+    mask = ~np.isnan(df[col_a]) & ~np.isnan(df[col_b])
+    if np.sum(mask) < 2:
+        return False, 1.0
+
+    # Paired t-test since same test instances
+    t_stat, p_value = ttest_rel(df[col_a][mask], df[col_b][mask])
+
+    return p_value < 0.05, p_value
+
 
 # --- Check for Required Files ---
 required_files = [MODEL_A_PATH, MODEL_B_PATH, MODEL_C_PATH, MODEL_D_PATH, VECTORIZER_PATH, AGG_DATA_CACHE]
@@ -427,7 +471,54 @@ else:
     # Ensure bins are ordered correctly for plotting
     df_results['n_bin'] = pd.Categorical(df_results['n_bin'], categories=bin_labels, ordered=True)
 
-    # 10. Calculate Bin Averages
+    # 10. Calculate Bin Averages with Confidence Intervals
+    models_list = ["A", "B", "C", "D"]
+    model_names = {
+        "A": "Model A (MLP+CE)",
+        "B": "Model B (MLP+KL)",
+        "C": "Model C (BONN)",
+        "D": "Model D (TORP+EMD)"
+    }
+
+    metric_types = ["CE_emp", "E_CE", "EMD_emp", "E_EMD"]
+    metric_names = {
+        "CE_emp": "CE Empirical",
+        "E_CE": "E[CE]",
+        "EMD_emp": "EMD Empirical",
+        "E_EMD": "E[EMD]"
+    }
+
+    bin_analysis_with_ci = []
+
+    for bin_name in bin_labels:
+        bin_data = df_results[df_results['n_bin'] == bin_name]
+        bin_count = len(bin_data)
+
+        # For each model and metric
+        for model in models_list:
+            for metric in metric_types:
+                metric_col = f"{metric}_{model}"
+                values = bin_data[metric_col].values
+
+                # Calculate mean
+                mean_value = np.nanmean(values)
+
+                # Calculate 95% confidence interval
+                lower, upper = bootstrap_confidence_interval(values)
+
+                bin_analysis_with_ci.append({
+                    'n_bin': bin_name,
+                    'Count': bin_count,
+                    'Model': model_names[model],
+                    'Metric': metric_names[metric],
+                    'Mean': mean_value,
+                    'Lower': lower,
+                    'Upper': upper
+                })
+
+    df_ci = pd.DataFrame(bin_analysis_with_ci)
+
+    # For the summary table without CI
     bin_analysis = df_results.groupby('n_bin', observed=False).agg(
         Count=('product_id', 'count'),
         # Model A
@@ -455,137 +546,277 @@ else:
     print("\n--- Average Scores per Number of Reviews (n) Bin ---")
     print(bin_analysis.round(4).to_markdown(index=False, numalign="right", stralign="right"))
 
-    # 11. Prepare data for visualization
-    # We'll create multiple models comparison for each metric type
-    models_list = ["A", "B", "C", "D"]
-    model_names = {
-        "A": "Model A (MLP+CE)",
-        "B": "Model B (MLP+KL)",
-        "C": "Model C (BONN)",
-        "D": "Model D (TORP+EMD)"
-    }
+    # 11. Calculate Statistical Significance
+    print("\nCalculating statistical significance between models...")
+    significance_results = []
 
-    metric_types = ["CE_emp", "E_CE", "EMD_emp", "E_EMD"]
-    metric_names = {
-        "CE_emp": "CE Empirical",
-        "E_CE": "E[CE]",
-        "EMD_emp": "EMD Empirical",
-        "E_EMD": "E[EMD]"
-    }
+    # Compare all model pairs for E[EMD] metric
+    for bin_name in bin_labels:
+        bin_data = df_results[df_results['n_bin'] == bin_name]
 
-    # Create visualization dataframe
-    bin_columns = ['n_bin', 'Count']
-    viz_data = []
+        for i, model_i in enumerate(models_list):
+            for j, model_j in enumerate(models_list):
+                if i >= j:  # Skip self-comparisons and duplicate pairs
+                    continue
 
-    for metric in metric_types:
-        for model in models_list:
-            column_name = f"{metric}_{model}_mean"
-            for _, row in bin_analysis.iterrows():
-                viz_data.append({
-                    'n_bin': row['n_bin'],
-                    'Count': row['Count'],
-                    'Metric': metric_names[metric],
-                    'Model': model_names[model],
-                    'Score': row[column_name]
-                })
+                for metric in metric_types:
+                    is_significant, p_value = calculate_significance(bin_data, model_i, model_j, metric)
 
-    df_viz = pd.DataFrame(viz_data)
+                    significance_results.append({
+                        'n_bin': bin_name,
+                        'ModelA': model_names[model_i],
+                        'ModelB': model_names[model_j],
+                        'Metric': metric_names[metric],
+                        'Significant': is_significant,
+                        'p_value': p_value
+                    })
 
-    # 12. Create visualizations
-    # First: Create comparison of all models for each metric type
-    for metric in metric_types:
-        plt.figure(figsize=(10, 6))
-        df_metric = df_viz[df_viz['Metric'] == metric_names[metric]]
+    df_significance = pd.DataFrame(significance_results)
 
-        sns.lineplot(
-            data=df_metric,
-            x='n_bin',
-            y='Score',
-            hue='Model',
-            marker='o'
-        )
-
-        plt.title(f'{metric_names[metric]} Across Review Count Bins')
-        plt.ylabel('Average Score (Lower is Better)')
-        plt.xlabel('Number of Reviews (n)')
-        plt.xticks(rotation=45)
-        plt.grid(True, axis='y', linestyle=':', alpha=0.7)
-        plt.legend(title='Model')
-
-        plt.tight_layout()
-        plt.savefig(os.path.join(OUTPUT_DIR, f'model_comparison_{metric}.pdf'), bbox_inches='tight', dpi=300)
-        plt.savefig(os.path.join(OUTPUT_DIR, f'model_comparison_{metric}.png'), bbox_inches='tight', dpi=300)
-        plt.close()
-
-    # Second: Overall comparison plot with all models and metrics
-    print(f"\nCalculating overall average scores over {len(df_results)} test set products...")
-    avg_scores = df_results.mean(numeric_only=True)
-
-    # Prepare for overall comparison plot
-    overall_data = []
-
-    for metric in metric_types:
-        for model in models_list:
-            score_col = f"{metric}_{model}"
-            if score_col in avg_scores:
-                overall_data.append({
-                    'Metric': metric_names[metric],
-                    'Model': model_names[model],
-                    'Average Score': avg_scores[score_col]
-                })
-
-    df_overall = pd.DataFrame(overall_data)
-
-    # Create overall comparison plot
-    plt.figure(figsize=(12, 8))
-    ax = sns.barplot(
-        data=df_overall,
-        x='Metric',
-        y='Average Score',
-        hue='Model',
-        palette='colorblind'
+    # Extract significant differences for E[EMD] for reporting
+    emd_significance = df_significance[df_significance['Metric'] == 'E[EMD]'].copy()
+    emd_significance['Comparison'] = emd_significance.apply(
+        lambda x: f"{x['ModelA']} vs {x['ModelB']}", axis=1
     )
 
-    plt.title('Overall Comparison of Model Performance - Amazon Electronics Ratings', fontsize=16)
-    plt.ylabel('Average Metric Score (Lower is Better)', fontsize=12)
-    plt.xlabel('Evaluation Metric', fontsize=12)
-    plt.xticks(rotation=0, fontsize=10)
+    print("\n--- Significant Differences in E[EMD] (p < 0.05) ---")
+    sig_results = emd_significance[emd_significance['Significant']].sort_values(['n_bin', 'p_value'])
+    print(sig_results[['n_bin', 'Comparison', 'p_value']].round(4).to_markdown(index=False))
 
-    # Add value labels to bars
-    for container in ax.containers:
-        ax.bar_label(container, fmt='%.3f', padding=3, fontsize=8)
+    # 12. Create visualizations with confidence intervals
+    # For the E[EMD] bin comparison plot
+    plt.figure(figsize=(10, 6))
+    df_metric = df_ci[df_ci['Metric'] == 'E[EMD]']
 
-    plt.ylim(bottom=0)
-    plt.legend(title='Model', fontsize=10)
+    for model_name in model_names.values():
+        df_model = df_metric[df_metric['Model'] == model_name]
+
+        plt.errorbar(
+            x=df_model['n_bin'],
+            y=df_model['Mean'],
+            yerr=[df_model['Mean'] - df_model['Lower'], df_model['Upper'] - df_model['Mean']],
+            fmt='-o',
+            capsize=5,
+            label=model_name
+        )
+
+    plt.title('Expected Earth Mover\'s Distance (E[EMD]) Across Review Count Bins')
+    plt.ylabel('Average Score (Lower is Better)')
+    plt.xlabel('Number of Reviews (n)')
+    plt.xticks(rotation=45)
+    plt.grid(True, axis='y', linestyle=':', alpha=0.7)
+    plt.legend(title='Model')
     plt.tight_layout()
-
-    plt.savefig(os.path.join(OUTPUT_DIR, 'overall_model_comparison.pdf'), bbox_inches='tight', dpi=300)
-    plt.savefig(os.path.join(OUTPUT_DIR, 'overall_model_comparison.png'), bbox_inches='tight', dpi=300)
+    plt.savefig(os.path.join(OUTPUT_DIR, 'model_comparison_E_EMD_with_ci.png'), bbox_inches='tight', dpi=300)
+    plt.savefig(os.path.join(OUTPUT_DIR, 'model_comparison_E_EMD_with_ci.pdf'), bbox_inches='tight', dpi=300)
     plt.close()
 
-    # Create ranking table for each metric
-    ranking_data = {
-        'Metric': list(metric_names.values()),
-    }
+    # For the CE Empirical bin comparison plot
+    plt.figure(figsize=(10, 6))
+    df_metric = df_ci[df_ci['Metric'] == 'CE Empirical']
+
+    for model_name in model_names.values():
+        df_model = df_metric[df_metric['Model'] == model_name]
+
+        plt.errorbar(
+            x=df_model['n_bin'],
+            y=df_model['Mean'],
+            yerr=[df_model['Mean'] - df_model['Lower'], df_model['Upper'] - df_model['Mean']],
+            fmt='-o',
+            capsize=5,
+            label=model_name
+        )
+
+    plt.title('CE Empirical Across Review Count Bins')
+    plt.ylabel('Average Score (Lower is Better)')
+    plt.xlabel('Number of Reviews (n)')
+    plt.xticks(rotation=45)
+    plt.grid(True, axis='y', linestyle=':', alpha=0.7)
+    plt.legend(title='Model')
+    plt.tight_layout()
+    plt.savefig(os.path.join(OUTPUT_DIR, 'model_comparison_CE_emp_with_ci.png'), bbox_inches='tight', dpi=300)
+    plt.savefig(os.path.join(OUTPUT_DIR, 'model_comparison_CE_emp_with_ci.pdf'), bbox_inches='tight', dpi=300)
+    plt.close()
+
+    # Overall model comparison with confidence intervals
+    print(f"\nCalculating overall average scores over {len(df_results)} test set products...")
+
+    # Calculate overall metrics with confidence intervals
+    overall_with_ci = []
 
     for model in models_list:
-        model_key = model_names[model]
-        scores = []
         for metric in metric_types:
-            score_col = f"{metric}_{model}"
-            scores.append(avg_scores.get(score_col, np.nan))
-        ranking_data[model_key] = scores
+            metric_col = f"{metric}_{model}"
+            values = df_results[metric_col].values
 
-    df_ranking = pd.DataFrame(ranking_data)
-    df_ranking = df_ranking.set_index('Metric')
+            # Calculate mean
+            mean_value = np.nanmean(values)
 
-    # Add winner column
-    df_ranking['Winner'] = df_ranking.idxmin(axis=1, skipna=True)
+            # Calculate 95% confidence interval
+            lower, upper = bootstrap_confidence_interval(values)
 
-    print("\n--- Overall Model Ranking (Test Set Evaluation) ---")
-    print(df_ranking.round(4).to_markdown(numalign="right", stralign="right"))
+            overall_with_ci.append({
+                'Model': model_names[model],
+                'Metric': metric_names[metric],
+                'Mean': mean_value,
+                'Lower': lower,
+                'Upper': upper
+            })
 
-    # Save ranking to CSV
-    df_ranking.to_csv(os.path.join(OUTPUT_DIR, 'model_ranking.csv'))
+    df_overall_ci = pd.DataFrame(overall_with_ci)
 
-    print("\nEvaluation complete. Results saved to output directory.")
+    # Calculate significance for overall metrics
+    overall_significance = []
+
+    for i, model_i in enumerate(models_list):
+        for j, model_j in enumerate(models_list):
+            if i >= j:  # Skip self-comparisons and duplicate pairs
+                continue
+
+            for metric in metric_types:
+                is_significant, p_value = calculate_significance(df_results, model_i, model_j, metric)
+
+                overall_significance.append({
+                    'ModelA': model_names[model_i],
+                    'ModelB': model_names[model_j],
+                    'Metric': metric_names[metric],
+                    'Significant': is_significant,
+                    'p_value': p_value
+                })
+
+    df_overall_sig = pd.DataFrame(overall_significance)
+
+    # Create overall comparison plot with confidence intervals
+    plt.figure(figsize=(12, 8))
+
+    # Group by metric for easier plotting
+    for i, metric in enumerate(metric_names.values()):
+        # Create overall comparison plot with confidence intervals
+        plt.figure(figsize=(12, 8))
+
+        # Group by metric for easier plotting
+        for i, metric in enumerate(metric_names.values()):
+            plt.subplot(2, 2, i + 1)
+
+            df_metric = df_overall_ci[df_overall_ci['Metric'] == metric]
+            x_pos = np.arange(len(model_names))
+
+            # Plot bars with error bars
+            bars = plt.bar(
+                x_pos,
+                df_metric['Mean'],
+                yerr=[df_metric['Mean'] - df_metric['Lower'], df_metric['Upper'] - df_metric['Mean']],
+                capsize=5,
+                alpha=0.7
+            )
+
+            # Add value labels
+            for j, bar in enumerate(bars):
+                plt.text(
+                    bar.get_x() + bar.get_width() / 2,
+                    bar.get_height() + 0.01,
+                    f"{df_metric.iloc[j]['Mean']:.3f}",
+                    ha='center',
+                    va='bottom',
+                    fontsize=8
+                )
+
+            # Add significance markers
+            sig_pairs = df_overall_sig[(df_overall_sig['Metric'] == metric) &
+                                       (df_overall_sig['Significant'])]
+
+            if not sig_pairs.empty:
+                y_max = df_metric['Upper'].max() * 1.1
+                for idx, row in sig_pairs.iterrows():
+                    modelA_idx = list(model_names.values()).index(row['ModelA'])
+                    modelB_idx = list(model_names.values()).index(row['ModelB'])
+                    plt.plot([modelA_idx, modelB_idx], [y_max, y_max], 'k-')
+                    plt.text((modelA_idx + modelB_idx) / 2, y_max * 1.01, '*', ha='center')
+
+            # Formatting
+            plt.xticks(x_pos, [m.split(' ')[1] for m in model_names.values()], rotation=45)
+            plt.title(metric)
+            plt.ylabel('Average Score (Lower is Better)')
+
+            if i >= 2:  # Add x-label to bottom plots only
+                plt.xlabel('Model')
+
+            plt.grid(axis='y', linestyle=':', alpha=0.4)
+
+        plt.suptitle('Overall Model Performance with 95% Confidence Intervals', fontsize=16)
+        plt.tight_layout(rect=[0, 0, 1, 0.95])
+        plt.savefig(os.path.join(OUTPUT_DIR, 'overall_comparison_with_ci.png'), bbox_inches='tight', dpi=300)
+        plt.savefig(os.path.join(OUTPUT_DIR, 'overall_comparison_with_ci.pdf'), bbox_inches='tight', dpi=300)
+        plt.close()
+
+        # Create ranking table for each metric
+        ranking_data = {
+            'Metric': list(metric_names.values()),
+        }
+
+        for model in models_list:
+            model_key = model_names[model]
+            scores = []
+            cis = []
+            for metric in metric_types:
+                metric_fullname = metric_names[metric]
+                df_row = df_overall_ci[(df_overall_ci['Model'] == model_key) &
+                                       (df_overall_ci['Metric'] == metric_fullname)]
+                if not df_row.empty:
+                    mean_val = df_row.iloc[0]['Mean']
+                    lower = df_row.iloc[0]['Lower']
+                    upper = df_row.iloc[0]['Upper']
+                    scores.append(mean_val)
+                    cis.append(f"({lower:.4f}-{upper:.4f})")
+                else:
+                    scores.append(np.nan)
+                    cis.append("")
+
+            ranking_data[model_key] = scores
+            ranking_data[f"{model_key} 95% CI"] = cis
+
+        df_ranking = pd.DataFrame(ranking_data)
+
+        # Add winner column (with statistical significance)
+        winners = []
+        for metric in metric_names.values():
+            df_metric = df_overall_ci[df_overall_ci['Metric'] == metric]
+            best_model = df_metric.loc[df_metric['Mean'].idxmin(), 'Model']
+
+            # Check if significantly better than others
+            sig_better_than_all = True
+            for other_model in model_names.values():
+                if other_model == best_model:
+                    continue
+
+                comparison = df_overall_sig[
+                    (df_overall_sig['Metric'] == metric) &
+                    (
+                            ((df_overall_sig['ModelA'] == best_model) & (df_overall_sig['ModelB'] == other_model)) |
+                            ((df_overall_sig['ModelA'] == other_model) & (df_overall_sig['ModelB'] == best_model))
+                    )
+                    ]
+
+                if not comparison.empty:
+                    if not comparison.iloc[0]['Significant']:
+                        sig_better_than_all = False
+                else:
+                    sig_better_than_all = False
+
+            winners.append(f"{best_model}{' *' if sig_better_than_all else ''}")
+
+        df_ranking['Winner'] = winners
+
+        print("\n--- Overall Model Ranking with Confidence Intervals (Test Set Evaluation) ---")
+        print(df_ranking[['Metric'] + [m for m in model_names.values()] + ['Winner']].round(4).to_markdown(
+            numalign="right", stralign="right"))
+
+        # Save detailed results to CSV
+        print("\nSaving detailed results to CSV files...")
+        df_results.to_csv(os.path.join(OUTPUT_DIR, 'all_results.csv'), index=False)
+        df_ci.to_csv(os.path.join(OUTPUT_DIR, 'binned_results_with_ci.csv'), index=False)
+        df_overall_ci.to_csv(os.path.join(OUTPUT_DIR, 'overall_results_with_ci.csv'), index=False)
+        df_significance.to_csv(os.path.join(OUTPUT_DIR, 'significance_tests.csv'), index=False)
+        df_ranking.to_csv(os.path.join(OUTPUT_DIR, 'model_ranking_with_ci.csv'), index=False)
+
+        print("\nEvaluation complete. Results and visualizations saved to the output directory.")

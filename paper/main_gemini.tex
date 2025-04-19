@@ -1,0 +1,386 @@
+\documentclass[journal]{IEEEtran}
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{enumitem}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+
+% IEEE wants URLs in footnotes
+\usepackage[hidelinks]{hyperref} % Consider adding colorlinks for easier navigation during review if allowed
+
+\title{Soft Metrics for Ordinal Label Uncertainty with Variable Sample Sizes}
+
+% \author{Alessandro~Magnani
+% \thanks{A. Magnani is with Coupang, Mountain View, CA, USA.
+% Email: ale.magnani@gmail.com}}
+
+\author{Anonymous Author(s)\\
+Paper under double-blind review}
+
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We address the challenge of handling uncertainty in ordinal label collections where the number of evaluations per instance varies significantly - from as few as two to hundreds of annotations. While this scenario is common in real-world applications like e-commerce ratings, content moderation, and medical diagnosis severity assessments, current approaches often ignore both the ordinal nature of labels and the varying degrees of uncertainty from inconsistent sample sizes. We propose two key extensions to existing soft metrics: First, we develop expectation-based versions of three fundamental soft metrics (KL divergence, cross-entropy, and Jensen-Shannon divergence) under a Dirichlet distribution assumption, deriving clean analytical solutions particularly for the KL divergence case. Second, we introduce Earth Mover's Distance (EMD) as a soft metric to naturally capture the ordinal relationships between labels. While our focus is on metric development, these uncertainty-aware measures can significantly impact model training and evaluation. We validate our approach through illustrative examples and extensive experiments on two real-world datasets (Amazon product reviews and ConvAbuse conversational abuse detection), demonstrating the practical benefits and the importance of proper uncertainty handling. Our approach provides a principled way to handle both label uncertainty and ordinality across various domains where human evaluation yields inconsistent numbers of annotations per instance. Code implementing the proposed metrics and experiments will be made publicly available.
+\end{abstract}
+
+\section{Introduction}
+The collection of human annotations for machine learning tasks frequently results in datasets with ordinal labels - ratings or assessments that follow a natural order \cite{plank2022}. Examples abound across domains: e-commerce product ratings (1-5 stars), content moderation severity levels (benign to severely harmful), medical diagnosis classifications (from normal to severe), or educational assessment scores. While these labels are often treated as categorical variables for simplicity, this approach discards valuable ordinal information - a 4-star rating is not just different from a 2-star rating; it is better by a quantifiable amount.
+
+A fundamental challenge in working with such datasets is the distinction between hard and soft labels. Hard labels assign a single categorical value to each instance, while soft labels maintain a probability distribution over possible values \cite{peterson2019}. While hard labels are simpler to work with computationally, they can be misleading when there is genuine uncertainty or disagreement among annotators \cite{uma2021}.
+
+The challenge is compounded by the practical reality of data collection: the number of annotations per instance often varies dramatically within the same dataset. Some instances might have hundreds of ratings (popular products on e-commerce sites), while others might have as few as two (newly listed items). This variable sample size introduces different levels of uncertainty in our understanding of the true label distribution - we should be more confident in the average rating derived from 100 reviewers than from 2 reviewers \cite{uma2021}.
+
+Traditional approaches often struggle with this heterogeneity, either by discarding instances with few annotations or by treating all empirical distributions with equal confidence, regardless of the sample size. Furthermore, standard categorical metrics fail to capture the inherent order in the labels.
+
+To address these limitations, we propose a principled framework that makes three key contributions:
+
+\begin{enumerate}
+    \item We develop expectation-based versions of fundamental soft metrics (KL divergence, cross-entropy, and Jensen-Shannon divergence) under a Dirichlet distribution assumption. This Bayesian approach naturally handles varying sample sizes by appropriately weighting the influence of prior knowledge versus observed data, providing well-calibrated uncertainty estimates.
+    \item We introduce Earth Mover's Distance (EMD) as a soft metric that explicitly captures ordinal relationships between labels. Unlike traditional metrics that treat categories as unrelated, EMD accounts for the distance between ordinal levels, providing more meaningful comparisons for ordinal data.
+    \item We derive clean analytical solutions for the expectation-based metrics, particularly for the KL divergence case, making our approach both theoretically sound and computationally practical. For cases where analytical solutions are not readily available (such as EMD), we provide efficient numerical approximations.
+\end{enumerate}
+
+Our framework offers several key advantages: it naturally handles datasets with varying numbers of annotations per instance, appropriately adjusting confidence based on sample size; it preserves and leverages ordinal relationships between labels; it provides well-calibrated uncertainty estimates suitable for downstream tasks; and it maintains computational efficiency.
+
+We provide illustrative examples and validate our framework through comprehensive experiments on two diverse real-world datasets: Amazon product reviews and the ConvAbuse dataset for conversational abuse detection, demonstrating the practical impact of our proposed metrics. We further plan to release our code implementation to facilitate adoption and further research. While our primary focus is metric development, we emphasize that these uncertainty-aware and ordinal-aware measures can be readily incorporated into model training objectives.
+
+\section{Related Work}
+\subsection{Human Label Variation in Machine Learning}
+The challenge of human label variation has been increasingly recognized as a fundamental aspect of machine learning systems. \cite{plank2022} frames this not as noise to be eliminated but as an inherent characteristic of human annotation that should be embraced. This perspective builds on earlier work by \cite{pavlick2019} who found genuine disagreement among annotators is prevalent in many datasets. \cite{uma2021b} categorize sources of variation into genuine disagreement, subjective interpretation differences, and plausible multiple answers. \cite{aroyo2015} introduced "crowd truth" to capture inherent ambiguity, challenging the treatment of disagreement purely as noise.
+
+\subsection{Approaches to Label Uncertainty}
+Historical approaches aimed either to resolve uncertainty via aggregation (e.g., \cite{dawid1979, paun2022}) or embrace it as informative. Dawid and Skene \cite{dawid1979} and extensions \cite{raykar2010} model annotator reliability, often focusing on consensus estimation. However, attempting to force consensus can reduce robustness \cite{peterson2019}. The latter camp, including \cite{sommerauer2020, fornaciari2021, uma2021}, develops methods to learn directly from soft labels or disagreement distributions, recognizing their value, especially in subjective domains \cite{demszky2020}. Peterson et al. \cite{peterson2019} proposed Joint-Distribution Soft Loss (JDSL) to model uncertainty directly but didn't specifically address varying sample sizes or ordinality. Learning from Label Proportions (LLP) \cite{quadrianto2009} handles group-level proportions but typically overlooks individual instance uncertainty from small sample sizes. Paun et al. \cite{paun2018} offer a comparison of aggregation methods, mostly for categorical labels. Our work builds on the principle of learning from disagreement but adds Bayesian calibration for sample size and explicit ordinal handling.
+
+\subsection{Statistical and Bayesian Approaches to Label Uncertainty}
+Early probabilistic methods \cite{smyth1995} have evolved into more sophisticated techniques. Bayesian approaches \cite{gordon2021, li2019} are prominent. Kendall and Gal \cite{kendall2017} distinguish aleatoric (data) and epistemic (model) uncertainty, with the former being relevant here, though they don't focus on ordinality or sample size effects in label distributions. The use of Dirichlet distributions for label uncertainty modeling \cite{archambeau2016} has precedent, but our application to derive expected soft metrics, particularly with analytical solutions for KL divergence, is novel. Our framework integrates Bayesian uncertainty quantification (reflecting sample size) with ordinal metrics.
+
+\subsection{Ordinal Labels in Machine Learning}
+The specific nature of ordinal labels is crucial in domains like medical imaging \cite{cheplygina2018} and sentiment analysis \cite{alm2011}. Treating them as purely categorical discards information \cite{manning2011, zeman2010}. Traditional methods include ordered logit/probit models \cite{mccullagh1980}. ML approaches include Gaussian process ordinal regression \cite{chu2005} and ordinal distribution regression \cite{seeger2021}. These capture order but typically don't integrate uncertainty from variable annotation counts as our method does. Our use of EMD builds on concepts from image comparison \cite{levina2001} and distribution matching \cite{cui2020}, but its integration within our Bayesian framework for label uncertainty is unique. Cui et al. \cite{cui2020} use Wasserstein distances (related to EMD) but without the sample-size-based uncertainty quantification.
+
+\subsection{Applications in E-commerce and Content Moderation}
+The practical relevance is high in e-commerce \cite{liu2016} and content moderation \cite{cercas2021}, domains characterized by both variable annotation counts and ordinal scales, making them ideal testbeds for our integrated approach.
+
+\section{Methodology}
+
+\subsection{Problem Formulation}
+Consider a rating system with $K$ ordered labels $\{0,...,K-1\}$ where each label has a semantic interpretation (e.g., 0="poor", ..., 4="excellent"). For each item $i$, we collect $n_i$ ratings, resulting in observed counts $n^{(i)} = (n_0^{(i)}, ..., n_{K-1}^{(i)})$ such that $\sum_k n_k^{(i)} = n_i$. The sample size $n_i$ can vary significantly across items. Our goal is to define metrics comparing a predicted distribution $q^{(i)}$ with the uncertain target distribution $p^{(i)}$ derived from counts $n^{(i)}$, accounting for both the ordinal nature of labels and the uncertainty due to $n_i$.
+
+\subsection{Bayesian Label Distribution Modeling}
+We model the uncertainty in the true underlying label distribution $p = (p_0, ..., p_{K-1})$ for a given item using a Bayesian approach based on the observed counts $n = (n_0, ..., n_{K-1})$.
+
+\subsubsection{Prior and Posterior Distributions}
+We assume a Dirichlet prior over the label probabilities $p$:
+\begin{equation}
+p \sim \text{Dir}(\alpha_0, ..., \alpha_{K-1})
+\end{equation}
+where $\alpha = (\alpha_0, ..., \alpha_{K-1})$ are the prior concentration parameters. A common choice is the uniform (uninformative) prior with $\alpha_k = 1$ for all $k$. Given the observed counts $n$, the posterior distribution, due to conjugacy, is also Dirichlet:
+\begin{equation}
+p|n \sim \text{Dir}(\alpha_0 + n_0, ..., \alpha_{K-1} + n_{K-1})
+\end{equation}
+
+\subsubsection{Expected Label Probabilities}
+The expected probability of label $k$ under the posterior distribution is:
+\begin{equation}
+E[p_k|n] = \frac{\alpha_k + n_k}{\sum_{j=0}^{K-1} (\alpha_j + n_j)} = \frac{\alpha_k + n_k}{\alpha_{tot} + n_{tot}}
+\end{equation}
+where $\alpha_{tot} = \sum_j \alpha_j$ and $n_{tot} = \sum_j n_j$. This provides a smoothed estimate compared to the raw frequency $n_k / n_{tot}$. With a uniform prior ($\alpha_k = 1$) and only two "excellent" (label $K-1$) ratings out of $n_{tot}=2$, the expected probability is $E[p_{K-1}|n] = (1 + 2) / (K + 2)$, reflecting uncertainty due to the small sample size, unlike the raw frequency of 1.0. As $n_{tot}$ increases, this expectation converges to the raw frequency.
+
+\subsubsection{Expected Metrics}
+We can now define expected versions of standard soft metrics by taking the expectation over the posterior distribution $p|n$. Let $q$ be the predicted distribution.
+
+The **Expected Cross-Entropy** $E[\text{CE}(p,q)]$ is:
+\begin{equation}
+\begin{split}
+E[-\sum_k p_k \log(q_k) | n] &= -\sum_k E[p_k|n] \log(q_k) \\
+ &= -\sum_k \frac{\alpha_k + n_k}{\alpha_{tot} + n_{tot}}\log(q_k)
+\end{split}
+\end{equation}
+This simply replaces the target probabilities in standard cross-entropy with their posterior expectations.
+
+The **Expected KL Divergence** $E[\text{KL}(p||q)]$ requires the expectation of $p_k \log p_k$. Using properties of the Dirichlet distribution (see Appendix \ref{app:entropy_derivation}), we get:
+\begin{equation}
+\label{eq:expected_kl}
+\begin{split}
+E[\text{KL}(p||q) | n] = E[\sum_k p_k \log \frac{p_k}{q_k} | n] \\
+= \sum_k E[p_k \log p_k | n] - \sum_k E[p_k | n] \log q_k \\
+= \sum_k \frac{\alpha_k + n_k}{\alpha_{tot} + n_{tot}} \Big( \psi(\alpha_k + n_k + 1) \\
+ \qquad - \psi(\alpha_{tot} + n_{tot} + 1) - \log(q_k) \Big)
+\end{split}
+\end{equation}
+where $\psi(x)$ is the digamma function. This provides an analytical form for the expected KL divergence.
+
+The **Expected Jensen-Shannon Divergence** $E[\text{JSD}(p||q)]$ can be derived similarly, as $\text{JSD}(p||q) = \frac{1}{2} \text{KL}(p||m) + \frac{1}{2} \text{KL}(q||m)$ where $m = \frac{1}{2}(p+q)$. Taking the expectation involves terms similar to Eq. \ref{eq:expected_kl}.
+
+\subsubsection{Properties of Expected Metrics}
+These expectation-based metrics offer:
+\begin{itemize}
+    \item \textbf{Principled Uncertainty Handling:} They naturally incorporate uncertainty based on sample size via the Bayesian posterior. Low $n_{tot}$ results in expectations closer to the prior mean, high $n_{tot}$ results in expectations dominated by data.
+    \item \textbf{Computational Efficiency:} Expected CE requires only calculating posterior mean probabilities (Eq. 3), a minimal overhead. Expected KL involves the digamma function, efficiently computable.
+    \item \textbf{Analytical Tractability:} Key metrics like E[CE] and E[KL] have closed-form expressions.
+    \item \textbf{Calibration:} They provide uncertainty estimates reflecting sample size, which is crucial for reliable evaluation, especially with sparse data, and aligns with goals in model calibration research \cite{guo2017}.
+\end{itemize}
+
+\subsection{Earth Mover's Distance for Ordinal Labels}
+Standard metrics treat labels as independent categories. EMD (or Wasserstein-1D distance for ordered labels) measures the cost of transforming one distribution into another, considering the ground distance between labels. This concept has also been explored for defining loss functions in machine learning \cite{frogner2015}.
+
+Define the ground distance between ordinal labels $k$ and $j$ as $d(k,j) = |k - j|$. (Normalization by $K-1$ is possible but not strictly necessary if relative values are the focus). The EMD between distributions $P=(P_0,...,P_{K-1})$ and $Q=(Q_0,...,Q_{K-1})$ is:
+\begin{equation}
+\text{EMD}(P,Q) = \sum_{k=0}^{K-2} |\sum_{j=0}^k (P_j - Q_j)| = \sum_{k=0}^{K-1} |CDF_P(k) - CDF_Q(k)|
+\end{equation}
+where $CDF_P(k) = \sum_{j=0}^k P_j$ is the cumulative distribution function. This $O(K)$ computation leverages the 1D structure.
+
+\subsubsection{Expected EMD under Dirichlet Posterior}
+The expectation $E[\text{EMD}(p,q)|n]$ involves the expectation of absolute differences of cumulative sums of Dirichlet variables:
+\begin{equation}
+E[\text{EMD}(p,q)|n] = E \left[ \sum_{k=0}^{K-2} |\sum_{j=0}^k (p_j - q_j)| \;\middle|\; n \right]
+\end{equation}
+This expectation does not have a known simple closed-form solution. We approximate it using Monte Carlo sampling:
+\begin{equation}
+E[\text{EMD}(p,q)|n] \approx \frac{1}{N_{samples}} \sum_{i=1}^{N_{samples}} \text{EMD}(p^{(i)},q)
+\end{equation}
+where each $p^{(i)}$ is a sample drawn from the posterior $\text{Dir}(\alpha+n)$. A moderate number of samples (e.g., $N_{samples}=1000$) typically yields stable estimates.
+
+\subsubsection{Computational Complexity}
+- **E[CE]:** $O(K)$ per instance (dominated by calculating posterior means).
+- **E[KL]:** $O(K)$ per instance (dominated by digamma calculations).
+- **E[EMD]:** $O(N_{samples} \times K)$ per instance (sampling from Dirichlet is $O(K)$, EMD is $O(K)$). Can be parallelized.
+
+\subsection{Illustrative Examples}
+
+\subsubsection{Example 1: Impact of Sample Size on E[CE]}
+Consider a 5-label system ($K=5$) with a uniform prior ($\alpha_k=1$). An item initially has counts $n = [1, 2, 4, 2, 1]$ ($n_{tot}=10$). We compare two predictions: $q_{match} = [0.1, 0.2, 0.4, 0.2, 0.1]$ and $q_{mismatch} = [0.1, 0.3, 0.3, 0.2, 0.1]$. We calculate E[CE] using Eq. 4 as we scale the counts $n$ by factors $m=1, 2, 4, 10$ (i.e., $n_{tot}=10, 20, 40, 100$).
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.8\linewidth]{cross_entropy_plot.pdf} % Assuming this plot is still relevant for E[CE]
+\caption{Expected cross-entropy for matching and mismatched predictions as observations increase (scaled counts). Uncertainty decreases (lower E[CE]) and discriminative power increases (wider gap) with more data.}
+\label{fig:cross_entropy}
+\end{figure}
+
+As shown in Figure \ref{fig:cross_entropy}, E[CE] decreases for both predictions as $n_{tot}$ grows, reflecting reduced uncertainty. The gap between $E[\text{CE}(p, q_{match})]$ and $E[\text{CE}(p, q_{mismatch})]$ widens, indicating the metric becomes more discriminative with more data. With few samples, the prior dominates, making the metric less sensitive to prediction errors.
+
+\subsubsection{Example 2: Ordinal vs Categorical Differences using EMD}
+Consider two scenarios with $K=5$.
+Scenario A: True $p=[0.0, 0.8, 0.2, 0.0, 0.0]$, Predicted $q_A=[0.0, 0.2, 0.8, 0.0, 0.0]$. (Adjacent error)
+Scenario B: True $p=[0.0, 0.8, 0.0, 0.0, 0.2]$, Predicted $q_B=[0.0, 0.2, 0.0, 0.0, 0.8]$. (Distant error)
+
+Standard KL/CE might give similar scores: $\text{KL}(p||q_A) \approx 0.97$, $\text{KL}(p||q_B) \approx 0.97$.
+EMD captures the ordinal difference (using $d(k,j)=|k-j|$):
+- $\text{EMD}(p, q_A) = \sum |CDF_p(k) - CDF_{q_A}(k)| = |0.0-0.0| + |0.8-0.2| + |1.0-1.0| + |1.0-1.0| + |1.0-1.0| = 0.6$.
+- $\text{EMD}(p, q_B) = \sum |CDF_p(k) - CDF_{q_B}(k)| = |0.0-0.0| + |0.8-0.2| + |0.8-0.2| + |0.8-0.2| + |1.0-1.0| = 0.6 + 0.6 + 0.6 + 0 = 1.8$.
+(Note: EMD calculation adjusted for correctness using CDF definition).
+
+EMD clearly penalizes the distant error in Scenario B much more heavily. Expected EMD would show similar behavior, averaged over samples from the posterior.
+
+\section{Experimental Validation on Amazon Electronics Reviews Dataset}
+
+We validate our framework on the Amazon Electronics Reviews dataset \cite{he2016}, demonstrating the impact of accounting for sample size uncertainty and ordinality in a real-world prediction task.
+
+\subsection{Experimental Setup}
+We sampled 20,000 products with $\ge 5$ reviews from the dataset's 5-core version. Product titles served as features to predict the 1-5 star rating distribution. Review counts varied significantly. We compared four models:
+\begin{itemize}
+    \item \textbf{Model A (MLP+CE\_emp)}: MLP trained with standard cross-entropy on raw empirical frequencies $n_k/n_{tot}$. Ignores uncertainty and ordinality.
+    \item \textbf{Model B (MLP+KL\_smooth)}: MLP trained with KL divergence loss against Gaussian-smoothed empirical frequencies. Implicitly incorporates some ordinality.
+    \item \textbf{Model C (BONN)}: Bayesian Ordinal Neural Network using a cumulative link function. Explicitly ordinal.
+    \item \textbf{Model D (TORP+EMD)}: Transformer architecture trained with an EMD-based loss. Ordinal-aware.
+\end{itemize}
+We evaluated models using four metrics:
+\begin{itemize}
+    \item CE Empirical (CE\_emp): Standard CE against raw frequencies.
+    \item E[CE]: Our expected cross-entropy (Eq. 4) with uniform prior $\alpha_k=1$.
+    \item EMD Empirical (EMD\_emp): EMD against raw frequencies.
+    \item E[EMD]: Our expected EMD (Eq. 8, MC approx.) with uniform prior.
+\end{itemize}
+
+\begin{table}[t]
+\centering
+\small
+\caption{Overall model ranking by metric type on Amazon Reviews (lower scores are better, best scores in \textbf{bold})}
+\label{tab:model_ranking}
+\begin{tabular}{|l|cccc|}
+\hline
+\textbf{Metric} & \textbf{Model A} & \textbf{Model B} & \textbf{Model C} & \textbf{Model D} \\
+\hline
+CE Empirical & \textbf{1.251} & 1.255 & 1.268 & 1.265 \\
+E[CE] & 1.455 & \textbf{1.443} & 1.451 & 1.447 \\
+EMD Empirical & \textbf{0.531} & 0.536 & 0.544 & 0.534 \\
+E[EMD] & 0.542 & \textbf{0.526} & 0.542 & 0.532 \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Results and Analysis}
+
+\subsubsection{Metric Choice Determines Model Selection}
+Table \ref{tab:model_ranking} shows a striking result: the choice of evaluation metric dictates the best-performing model. Standard empirical metrics (CE\_emp, EMD\_emp) favor Model A (simple MLP trained on raw frequencies). However, our proposed expected metrics (E[CE], E[EMD]), which account for uncertainty and ordinality (via EMD), select Model B (MLP trained with smoothed targets) as superior. This reversal highlights that ignoring uncertainty leads to potentially misleading model comparisons. Model B's training implicitly respects uncertainty/ordinality, aligning better with the expected metrics.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{model_comparison_E_EMD.png}
+    \caption{Expected Earth Mover's Distance (E[EMD]) across review count bins on Amazon Reviews. Model B excels, especially in low-count bins, demonstrating the value of uncertainty modeling.}
+    \label{fig:emd_bin_comparison}
+\end{figure}
+
+\subsubsection{Uncertainty Calibration by Sample Size}
+Figure \ref{fig:emd_bin_comparison} plots E[EMD] performance across bins based on the number of reviews per product. Model B demonstrates a clear advantage over others, particularly for products with few reviews (5-10 bin). As the review count increases, the uncertainty decreases, and the performance gap between models narrows. This directly supports our hypothesis that explicitly modeling uncertainty is most critical when data is sparse.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{model_comparison_CE_emp.png}
+    \caption{CE Empirical scores across review count bins on Amazon Reviews. Performance paradoxically worsens initially before improving, highlighting issues with empirical metrics on small, noisy samples.}
+    \label{fig:ce_empirical_curve}
+\end{figure}
+
+\subsubsection{The Paradox of Empirical Metrics}
+Figure \ref{fig:ce_empirical_curve} reveals a non-monotonic trend for the CE Empirical metric. Performance initially degrades as review counts increase (from 5 to ~20) before improving again. This counterintuitive behavior suggests that empirical metrics can be misleading with small sample sizes. They might unduly reward models for overfitting to the noisy empirical distribution observed from few reviews. Our expected metrics, by incorporating prior-based smoothing, avoid this pitfall. The superior performance of Model B under expected metrics, despite its simplicity compared to C and D, suggests that the training objective's alignment with uncertainty/ordinality might be more crucial than architectural complexity alone in this scenario.
+
+\subsection{Practical Implications}
+These findings suggest that:
+1.  Evaluating models with expected metrics can lead to selecting different, potentially more robust models, especially for scenarios involving items with few annotations (e.g., new products).
+2.  Training objectives that implicitly or explicitly account for uncertainty and ordinality (like Model B's smoothed targets or EMD loss) are beneficial.
+3.  Our metrics provide a more reliable evaluation framework across varying sample size regimes commonly found in real-world applications.
+
+
+\section{Experimental Validation on ConvAbuse Dataset}
+
+We further validate our framework on the ConvAbuse dataset \cite{cercas2021}, focusing on conversational abuse detection with ordinal severity labels annotated by multiple experts.
+
+\subsection{Dataset Characteristics}
+ConvAbuse contains conversations annotated for abuse severity on a 5-point ordinal scale (+1 non-abusive to -3 strongly abusive; we map this to 0-4 for consistency). Annotations come from 2-5 experts per utterance. This provides a setting with controlled, expert annotations but still features uncertainty due to limited annotators per instance.
+
+\subsection{Experimental Setup}
+We compare two BERT-based models for predicting the abuse severity distribution:
+\begin{itemize}
+    \item \textbf{Model A (No Context)}: Trained on individual user utterances.
+    \item \textbf{Model B (With Context)}: Trained using conversational context (previous turns).
+\end{itemize}
+We evaluated using the same four metrics as in the Amazon experiment: CE\_emp, E[CE], EMD\_emp, and E[EMD], using a uniform Dirichlet prior ($\alpha_k=1$).
+
+\begin{table}[t]
+\centering
+\caption{Overall model performance on ConvAbuse dataset (lower scores are better, best scores in \textbf{bold})}
+\label{tab:convabuse_results}
+\begin{tabular}{|l|cc|c|}
+\hline
+\textbf{Metric} & \textbf{Model A} & \textbf{Model B} & \textbf{Winner} \\
+\hline
+CE Empirical & \textbf{0.473} & 0.484 & Model A \\
+E[CE] & 2.580 & \textbf{2.526} & Model B \\
+EMD Empirical & \textbf{0.251} & 0.276 & Model A \\
+E[EMD] & 1.125 & \textbf{1.108} & Model B \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Results and Analysis}
+Table \ref{tab:convabuse_results} shows a similar model ranking reversal as observed with the Amazon dataset. Empirical metrics favor the simpler Model A (No Context), while our expected metrics (E[CE] and E[EMD]) identify Model B (With Context) as superior. This indicates that the benefits of using conversational context are better captured when evaluation properly accounts for annotation uncertainty.
+
+\begin{figure*}[t]
+    \centering
+    \includegraphics[width=0.8\textwidth]{conv_model_comparison_bins.png}
+    \caption{Model performance across annotation count bins on ConvAbuse for different metrics. Expected metrics (E[CE], E[EMD]) consistently favor Model B, especially with fewer annotations (2-3 bin), while empirical metrics show mixed results.}
+    \label{fig:convabuse_bins}
+\end{figure*}
+
+\begin{table}[t]
+\centering
+\caption{Average scores per annotation count bin on ConvAbuse (lower is better)}
+\label{tab:convabuse_bins_detailed} % Renamed table label for clarity
+\small
+\begin{tabular}{|c|c|cc|cc|}
+\hline
+\textbf{n\_bin} & \textbf{Count} & \multicolumn{2}{c|}{\textbf{CE\_emp}} & \multicolumn{2}{c|}{\textbf{E[CE]}} \\
+ & & \textbf{A} & \textbf{B} & \textbf{A} & \textbf{B} \\
+\hline
+2-3 & 508 & \textbf{0.498} & 0.513 & 2.649 & \textbf{2.588} \\
+4-5 & 93 & 0.358 & \textbf{0.351} & 2.248 & \textbf{2.229} \\
+6-10 & 8 & \textbf{0.199} & 0.202 & 2.055 & \textbf{2.047} \\
+\hline \hline
+ & & \multicolumn{2}{c|}{\textbf{EMD\_emp}} & \multicolumn{2}{c|}{\textbf{E[EMD]}} \\
+  & & \textbf{A} & \textbf{B} & \textbf{A} & \textbf{B} \\
+\hline
+2-3 & 508 & \textbf{0.258} & 0.285 & 1.141 & \textbf{1.121} \\
+4-5 & 93 & 0.211 & \textbf{0.207} & 1.025 & \textbf{1.022} \\
+6-10 & 8 & \textbf{0.140} & 0.141 & 0.941 & \textbf{0.939} \\
+\hline
+\end{tabular}
+\end{table}
+
+
+Figure \ref{fig:convabuse_bins} and Table \ref{tab:convabuse_bins_detailed} show performance broken down by the number of annotations per instance.
+\begin{itemize}
+    \item Metric scores generally improve (decrease) with more annotations, reflecting lower uncertainty.
+    \item Model B consistently performs better under expected metrics (E[CE], E[EMD]), especially in the dominant 2-3 annotation bin.
+    \item Empirical metrics show less consistent trends regarding which model is better, particularly EMD\_emp.
+\end{itemize}
+The majority of instances have only 2-3 annotations, highlighting the practical relevance of metrics robust to small sample sizes. E[EMD] effectively captures both the ordinal nature of abuse severity and the uncertainty, favoring the context-aware model.
+
+\subsection{Discussion}
+The ConvAbuse results reinforce the Amazon findings and demonstrate:
+\begin{itemize}
+    \item \textbf{Domain Generalization}: The framework and the observed metric behavior generalize across e-commerce ratings and conversational abuse detection.
+    \item \textbf{Annotation Paradigm Transfer}: Effective for both naturally varying crowd ratings (Amazon) and controlled expert annotations (ConvAbuse).
+    \item \textbf{Revealing Model Improvements}: Expected metrics surface the benefits of contextual information (Model B) that are obscured by empirical metrics when uncertainty is high.
+    \item \textbf{Practical Value}: Provides a reliable evaluation approach for domains like abuse detection where extensive annotation may be infeasible, correctly identifying better models even with few annotations per instance.
+\end{itemize}
+
+\section{Conclusions}
+
+We presented a principled framework for handling ordinal label uncertainty in datasets with variable annotation counts per instance, a common scenario in real-world machine learning applications. Our core contributions are: (1) expectation-based versions of standard soft metrics (CE, KL, JSD) derived from a Bayesian Dirichlet model, providing analytical solutions (especially for KL) that naturally handle sample size uncertainty; and (2) the application of Earth Mover's Distance as an expected metric (approximated via Monte Carlo) to explicitly capture ordinal relationships.
+
+Our extensive experiments, including illustrative examples and validation on two diverse, real-world datasets (Amazon Electronics Reviews and ConvAbuse), demonstrate the practical significance of our approach. We consistently observed that:
+\begin{itemize}
+    \item Traditional empirical metrics can lead to misleading model comparisons, potentially favoring models that overfit to noisy distributions from small samples.
+    \item Our proposed expected metrics (E[CE] and E[EMD]) provide a more robust evaluation, correctly identifying superior models, particularly when annotation counts are low.
+    \item Explicitly modeling ordinality via EMD offers valuable insights beyond standard categorical metrics.
+    \item The framework successfully generalizes across different domains and annotation paradigms.
+\end{itemize}
+
+The implications for practice are substantial. In e-commerce, content moderation, medical diagnosis, and other domains relying on ordinal human judgments with varying confidence, our metrics enable more reliable model evaluation and selection. They allow practitioners to appropriately weight evidence based on sample size and leverage the inherent order in labels, leading to potentially more robust and trustworthy systems. The computational efficiency, especially for E[CE] and E[KL], facilitates adoption.
+
+Future work could explore incorporating annotator reliability into the Bayesian model, extending the framework to hierarchical labels, or integrating these metrics directly into more sophisticated training objectives and active learning strategies \cite{settles2009}.
+
+By treating human label variation and the associated uncertainty not as mere noise but as quantifiable information, our work provides tools for building machine learning systems that better reflect the nuances of human judgment in real-world data. We plan to release the code for our metrics and experiments to encourage further research and application.
+
+
+\appendix
+\section{Derivation of Expected Entropy Term for KL Divergence}
+\label{app:entropy_derivation}
+
+The expected KL divergence $E[\text{KL}(p||q)|n]$ requires computing $E[\sum_k p_k \log p_k | n] = \sum_k E[p_k \log p_k | n]$. We need the expectation of $p_k \log p_k$ where $p \sim \text{Dir}(\beta)$ with posterior parameters $\beta_k = \alpha_k + n_k$. Let $\beta_{tot} = \sum_j \beta_j = \alpha_{tot} + n_{tot}$.
+
+The probability density function of $\text{Dir}(\beta)$ is $f(p|\beta) = \frac{1}{B(\beta)} \prod_{j=0}^{K-1} p_j^{\beta_j-1}$, where $B(\beta) = \frac{\prod_j \Gamma(\beta_j)}{\Gamma(\beta_{tot})}$ is the multivariate Beta function and $\Gamma$ is the Gamma function.
+
+The expectation is:
+\begin{equation}
+E[p_k \log p_k | \beta] = \int p_k \log p_k f(p|\beta) dp
+\end{equation}
+We use the identity relating the expectation of $\log p_k$ to the derivative of the log-normalizer (log multivariate Beta function):
+\begin{equation}
+E[\log p_k | \beta] = \frac{\partial}{\partial \beta_k} \log B(\beta) = \psi(\beta_k) - \psi(\beta_{tot})
+\end{equation}
+where $\psi(x) = \frac{d}{dx} \log \Gamma(x)$ is the digamma function.
+
+To find $E[p_k \log p_k]$, we can use a known result for the Dirichlet distribution (related to derivatives of the moment generating function or characteristic function, or directly via integration properties). A common formulation derived from properties of the Dirichlet distribution states:
+\begin{equation}
+E[p_k \log p_k | \beta] = E[p_k | \beta] \left( \psi(\beta_k + 1) - \psi(\beta_{tot} + 1) \right)
+\end{equation}
+Since $E[p_k | \beta] = \frac{\beta_k}{\beta_{tot}}$, we have:
+\begin{equation}
+E[p_k \log p_k | \beta] = \frac{\beta_k}{\beta_{tot}} \left( \psi(\beta_k + 1) - \psi(\beta_{tot} + 1) \right)
+\end{equation}
+Substituting back $\beta_k = \alpha_k + n_k$ and $\beta_{tot} = \alpha_{tot} + n_{tot}$:
+\begin{equation}
+E[p_k \log p_k | n] = \frac{\alpha_k + n_k}{\alpha_{tot} + n_{tot}} \left( \psi(\alpha_k + n_k + 1) - \psi(\alpha_{tot} + n_{tot} + 1) \right)
+\end{equation}
+This term is then used in the calculation of the expected KL divergence in Eq. \ref{eq:expected_kl}. Note that the expected entropy $E[H(p)|n] = - \sum_k E[p_k \log p_k | n]$.
+
+
+\bibliographystyle{IEEEtran}
+\bibliography{references} % Assumes your bib file is named references.bib
+
+\end{document}

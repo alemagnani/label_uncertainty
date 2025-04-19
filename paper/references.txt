@@ -1,0 +1,301 @@
+
+@article{plank2022,
+    title={The "problem" of human label variation: On ground truth in data, modeling and evaluation},
+    author={Plank, Barbara},
+    journal={arXiv preprint arXiv:2211.02570},
+    year={2022}
+}
+
+@inproceedings{peterson2019,
+    title={Human uncertainty makes classification more robust},
+    author={Peterson, Joshua C and Battleday, Ruairidh M and Griffiths, Thomas L and Russakovsky, Olga},
+    booktitle={Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV)},
+    pages={9617--9626},
+    year={2019}
+}
+
+@article{uma2021,
+    title={Learning from disagreement: A survey},
+    author={Uma, Alexandra and Fornaciari, Tommaso and Hovy, Dirk and Paun, Silviu and Plank, Barbara and Poesio, Massimo},
+    journal={Journal of Artificial Intelligence Research (JAIR)},
+    volume={72},
+    pages={1385--1470},
+    year={2021}
+}
+
+@article{pavlick2019,
+    title={Inherent disagreements in human textual inferences},
+    author={Pavlick, Ellie and Kwiatkowski, Tom},
+    journal={Transactions of the Association for Computational Linguistics (TACL)},
+    volume={7},
+    pages={677--694},
+    year={2019}
+}
+
+@article{aroyo2015,
+    title={Truth is a lie: Crowd truth and the seven myths of human annotation},
+    author={Aroyo, Lora and Welty, Chris},
+    journal={AI Magazine},
+    volume={36},
+    number={1},
+    pages={15--24},
+    year={2015}
+}
+
+@article{dawid1979,
+    title={Maximum likelihood estimation of observer error-rates using the {EM} algorithm},
+    author={Dawid, Alexander Philip and Skene, Allan M},
+    journal={Journal of the Royal Statistical Society. Series C (Applied Statistics)},
+    volume={28},
+    number={1},
+    pages={20--28},
+    year={1979}
+}
+
+@article{paun2022,
+    title={Statistical methods for annotation analysis},
+    author={Paun, Silviu and Artstein, Ron and Poesio, Massimo},
+    journal={Synthesis Lectures on Human Language Technologies},
+    volume={15},
+    number={1},
+    pages={1--217},
+    year={2022}
+}
+
+@inproceedings{sommerauer2020,
+    title={Would you describe a leopard as yellow? evaluating crowd-annotations with justified and informative disagreement},
+    author={Sommerauer, Pia and Fokkens, Antske and Vossen, Piek},
+    booktitle={Proceedings of the 28th International Conference on Computational Linguistics (COLING)},
+    pages={4798--4809},
+    year={2020}
+}
+
+@inproceedings{fornaciari2021,
+    title={Beyond black \& white: Leveraging annotator disagreement via soft-label multi-task learning},
+    author={Fornaciari, Tommaso and Uma, Alexandra and Paun, Silviu and Plank, Barbara and Hovy, Dirk and Poesio, Massimo},
+    booktitle={Proceedings of the 2021 Conference of the North American Chapter of the Association for Computational Linguistics (NAACL-HLT)},
+    pages={2591--2597},
+    year={2021}
+}
+
+@inproceedings{demszky2020,
+    title={{G}o{E}motions: A dataset of fine-grained emotions},
+    author={Demszky, Dorottya and Movshovitz-Attias, Dana and Ko, Jeongwoo and Cowen, Alan and Nemade, Gaurav and Ravi, Sujith},
+    booktitle={Proceedings of the 58th Annual Meeting of the Association for Computational Linguistics (ACL)},
+    pages={4040--4054},
+    year={2020}
+}
+
+@article{smyth1995,
+    title={Inference in probabilistic expert systems},
+    author={Smyth, Padhraic},
+    journal={Statistical Science},
+    volume={10},
+    number={1},
+    pages={48--58},
+    year={1995}
+}
+
+@inproceedings{gordon2021,
+    title={The disagreement deconvolution: Bringing machine learning performance metrics in line with reality},
+    author={Gordon, Mitchell L and Zhou, Kaitlyn and Patel, Kayur and Hashimoto, Tatsunori and Bernstein, Michael S},
+    booktitle={Proceedings of the 2021 CHI Conference on Human Factors in Computing Systems (CHI)},
+    pages={1--14},
+    year={2021}
+}
+
+@inproceedings{li2019,
+    title={Learning from noisy labels with distillation},
+    author={Li, Yuncheng and Yang, Jianchao and Song, Yale and Cao, Liangliang and Luo, Jiebo and Li, Li-Jia},
+    booktitle={Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV)},
+    pages={1910--1918},
+    year={2019}
+}
+
+@incollection{archambeau2016,
+    title={An introduction to probabilistic models with missing data},
+    author={Archambeau, C{\'e}dric},
+    booktitle={Statistical Data Analysis for the Physical Sciences},
+    editor={D'Agostini, Giulio}, % Simplified editor example
+    pages={185--212},
+    year={2016},
+    publisher={Springer}
+}
+
+@inproceedings{cheplygina2018,
+    title={Crowd disagreement about medical images is informative},
+    author={Cheplygina, Veronika and Pluim, Josien PW},
+    booktitle={Intravascular Imaging and Computer Assisted Stenting and Large-Scale Annotation of Biomedical Data and Expert Label Synthesis (MICCAI Workshop)},
+    series={Lecture Notes in Computer Science},
+    volume={11037},
+    pages={105--111},
+    year={2018},
+    publisher={Springer}
+}
+
+@inproceedings{alm2011,
+    title={Subjective natural language problems: Motivations, applications, characterizations, and implications},
+    author={Alm, Cecilia Ovesdotter},
+    booktitle={Proceedings of the 49th Annual Meeting of the Association for Computational Linguistics (ACL)},
+    pages={107--112},
+    year={2011}
+}
+
+@inproceedings{manning2011,
+    title={Part-of-speech tagging from 97\% to 100\%: is it time for some linguistics?},
+    author={Manning, Christopher D},
+    booktitle={International Conference on Intelligent Text Processing and Computational Linguistics (CICLing)},
+    series={Lecture Notes in Computer Science},
+    volume={6608},
+    pages={171--189},
+    year={2011},
+    publisher={Springer}
+}
+
+@inproceedings{zeman2010,
+    title={Hard problems of tagset conversion},
+    author={Zeman, Daniel},
+    booktitle={Proceedings of the Second International Conference on Global Interoperability for Language Resources (GIGR)},
+    pages={181--185},
+    year={2010}
+}
+
+@inproceedings{levina2001,
+    title={The earth mover's distance is the mallows distance: Some insights from statistics},
+    author={Levina, Elizaveta and Bickel, Peter},
+    booktitle={Proceedings Eighth IEEE International Conference on Computer Vision (ICCV)},
+    volume={2},
+    pages={251--256},
+    year={2001}
+}
+
+@inproceedings{cercas2021,
+    title={{C}onv{A}buse: Data, Analysis, and Benchmarks for Nuanced Abuse Detection in Conversational {AI}},
+    author={Cercas Curry, Amanda and Abercrombie, Gavin and Rieser, Verena},
+    booktitle={Proceedings of the 2021 Conference on Empirical Methods in Natural Language Processing (EMNLP)},
+    month = nov,
+    year = "2021",
+    address = "Online and Punta Cana, Dominican Republic",
+    publisher = "Association for Computational Linguistics",
+    url = "https://aclanthology.org/2021.emnlp-main.587",
+    doi = "10.18653/v1/2021.emnlp-main.587",
+    pages = "7388--7403"
+}
+
+@inproceedings{liu2016,
+    title={Understanding discourse on work and job-related well-being in public social media},
+    author={Liu, Tong and Homan, Christopher and Alm, Cecilia Ovesdotter and White, Ann Marie and Lytle, Megan C and Kautz, Henry A},
+    booktitle={Proceedings of the 54th Annual Meeting of the Association for Computational Linguistics (ACL)},
+    pages={1044--1053},
+    year={2016}
+}
+
+@inproceedings{quadrianto2009,
+    title={Estimating labels from label proportions},
+    author={Quadrianto, Novi and Smola, Alex J and Caetano, Tiberio S and Le, Quoc V},
+    booktitle={Proceedings of the 26th Annual International Conference on Machine Learning (ICML)},
+    pages={847--854},
+    year={2009}
+}
+
+@article{raykar2010,
+    title={Learning from crowds},
+    author={Raykar, Vikas C and Yu, Shipeng and Zhao, Linda H and Valadez, Gerardo Hermosillo and Florin, Charles and Bogoni, Luca and Moy, Linda},
+    journal={Journal of Machine Learning Research (JMLR)},
+    volume={11},
+    pages={1297--1322},
+    year={2010}
+}
+
+@inproceedings{kendall2017,
+    title={What uncertainties do we need in bayesian deep learning for computer vision?},
+    author={Kendall, Alex and Gal, Yarin},
+    booktitle={Advances in Neural Information Processing Systems (NeurIPS)},
+    pages={5574--5584},
+    year={2017}
+}
+
+@inproceedings{cui2020,
+    title={Learning from label proportions with consistency regularization},
+    author={Cui, Shuhao and Chen, Xuan and Wen, Junchi and Sun, Hongbo and Lei, Ding and Shi, Lei},
+    booktitle={Asian Conference on Machine Learning (ACML)},
+    pages={500--515},
+    year={2020},
+    series={Proceedings of Machine Learning Research},
+    volume={129},
+    publisher={PMLR}
+}
+
+@article{mccullagh1980,
+    title={Regression models for ordinal data},
+    author={McCullagh, Peter},
+    journal={Journal of the Royal Statistical Society. Series B (Methodological)},
+    volume={42},
+    number={2},
+    pages={109--127},
+    year={1980}
+}
+
+@article{chu2005,
+    title={Gaussian processes for ordinal regression},
+    author={Chu, Wei and Ghahramani, Zoubin},
+    journal={Journal of Machine Learning Research (JMLR)},
+    volume={6},
+    pages={1019--1041},
+    year={2005}
+}
+
+@inproceedings{seeger2021,
+    title={Ordinal distribution regression for gaze estimation},
+    author={Seeger, Matthias and Zhang, Yu-Xiong and Van Der Maaten, Laurens and Wang, Hao},
+    booktitle={Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+    pages={12780--12789},
+    year={2021}
+}
+
+@article{paun2018,
+    title={Comparing {B}ayesian models of annotation},
+    author={Paun, Silviu and Carpenter, Bob and Chamberlain, Jon and Hovy, Dirk and Kruschwitz, Udo and Poesio, Massimo},
+    journal={Transactions of the Association for Computational Linguistics (TACL)},
+    volume={6},
+    pages={571--585},
+    year={2018}
+}
+
+@inproceedings{he2016,
+    title = {Ups and Downs: Modeling the Visual Evolution of Fashion Trends with One-Class Collaborative Filtering},
+    author = {He, Ruining and McAuley, Julian},
+    booktitle = {Proceedings of the 25th International Conference on World Wide Web (WWW)},
+    pages = {507--517},
+    year = {2016},
+    organization = {ACM}
+}
+
+@inproceedings{guo2017,
+    title={On calibration of modern neural networks},
+    author={Guo, Chuan and Pleiss, Geoff and Sun, Yu and Weinberger, Kilian Q},
+    booktitle={Proceedings of the 34th International Conference on Machine Learning (ICML)},
+    pages={1321--1330},
+    year={2017},
+    series={Proceedings of Machine Learning Research},
+    volume={70},
+    publisher={PMLR}
+}
+
+@inproceedings{frogner2015,
+    title={Learning with a {W}asserstein loss},
+    author={Frogner, Charlie and Zhang, Chiyuan and Mobahi, Hossein and Araya-Polo, Mauricio and Poggio, Tomaso},
+    booktitle={Advances in Neural Information Processing Systems (NeurIPS)},
+    volume={28},
+    year={2015},
+    pages={2053--2061} % Added page numbers based on NeurIPS proceedings
+}
+
+@techreport{settles2009,
+    title={Active learning literature survey},
+    author={Settles, Burr},
+    institution={University of Wisconsin-Madison Department of Computer Sciences},
+    year={2009},
+    number={1648}
+}
+
